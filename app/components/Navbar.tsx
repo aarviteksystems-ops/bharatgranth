@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { 
   BookOpen, 
@@ -9,16 +9,25 @@ import {
   Menu, 
   X, 
   Flame, 
-  Sparkles 
+  Sparkles,
+  User,
+  LogOut,
+  Shield,
+  ChevronDown,
+  LogIn
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export function Navbar() {
+  const { user, isAuthenticated, openLoginModal, openSignupModal, logout } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -26,6 +35,16 @@ export function Navbar() {
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -100,8 +119,8 @@ export function Navbar() {
             </div>
           </form>
 
-          {/* Desktop Nav Links */}
-          <nav className="hidden lg:flex items-center gap-1">
+          {/* Desktop Nav Links & Auth */}
+          <nav className="hidden lg:flex items-center gap-2">
             {navLinks.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname === link.path;
@@ -109,7 +128,7 @@ export function Navbar() {
                 <Link
                   key={link.name}
                   to={link.path}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition ${
                     isActive
                       ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
                       : "text-stone-300 hover:text-amber-400 hover:bg-stone-900/50"
@@ -126,9 +145,87 @@ export function Navbar() {
               );
             })}
 
+            {/* User Auth Section */}
+            {isAuthenticated && user ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-900/80 border border-amber-900/40 hover:border-amber-500/50 transition"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-stone-950 text-xs font-bold font-cinzel">
+                    {user.displayHint.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="text-left">
+                    <div className="text-xs font-semibold text-stone-200 leading-tight">
+                      {user.displayHint}
+                    </div>
+                    <div className="text-[10px] text-amber-400 font-cinzel tracking-wider uppercase">
+                      {user.role}
+                    </div>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+                </button>
+
+                {userDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-stone-900 border border-amber-900/50 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md z-50 animate-fadeIn">
+                    <div className="p-3.5 border-b border-amber-900/30 bg-stone-950/60">
+                      <div className="text-xs font-cinzel font-bold text-amber-400">
+                        HASHED ACCOUNT
+                      </div>
+                      <div className="text-[11px] text-stone-400 font-mono mt-0.5">
+                        ID: {user.id}
+                      </div>
+                    </div>
+
+                    <div className="p-1.5 space-y-1">
+                      <Link
+                        to="/bookmarks"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-stone-300 hover:text-amber-400 hover:bg-stone-800/60 transition"
+                      >
+                        <Bookmark className="w-4 h-4 text-amber-500" />
+                        <span>Saved Verses ({bookmarkCount})</span>
+                      </Link>
+
+                      <Link
+                        to="/admin"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-stone-300 hover:text-amber-400 hover:bg-stone-800/60 transition"
+                      >
+                        <Shield className="w-4 h-4 text-purple-400" />
+                        <span>Admin Data Portal</span>
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          logout();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-red-400 hover:bg-red-950/30 transition text-left cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={openLoginModal}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-amber-900/40 text-amber-400 hover:text-amber-300 text-sm font-cinzel font-semibold transition shadow-sm cursor-pointer"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>SIGN IN</span>
+              </button>
+            )}
+
             <Link
               to="/read/bhagavad-gita/gita-ch-2"
-              className="ml-2 flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-stone-950 font-semibold text-sm hover:brightness-110 shadow-lg shadow-amber-600/20 transition"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-stone-950 font-semibold text-sm hover:brightness-110 shadow-lg shadow-amber-600/20 transition"
             >
               <Sparkles className="w-4 h-4" />
               <span>Read Gita</span>
@@ -160,6 +257,57 @@ export function Navbar() {
             <Search className="w-4 h-4 text-amber-500 absolute left-3.5 top-3" />
           </form>
 
+          {/* Mobile Auth Button */}
+          <div className="p-3 bg-stone-900/60 border border-amber-900/30 rounded-2xl">
+            {isAuthenticated && user ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-stone-950 text-xs font-bold font-cinzel">
+                    {user.displayHint.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-stone-200">
+                      {user.displayHint}
+                    </div>
+                    <div className="text-[10px] text-amber-400 uppercase font-cinzel">
+                      {user.role}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    logout();
+                  }}
+                  className="px-3 py-1.5 bg-red-950/50 border border-red-900/50 text-red-400 rounded-xl text-xs"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openLoginModal();
+                  }}
+                  className="py-2.5 bg-stone-900 border border-amber-900/40 text-amber-400 rounded-xl text-xs font-cinzel font-bold text-center"
+                >
+                  SIGN IN
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openSignupModal();
+                  }}
+                  className="py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-stone-950 rounded-xl text-xs font-cinzel font-bold text-center"
+                >
+                  REGISTER
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             {navLinks.map((link) => {
               const Icon = link.icon;
@@ -180,6 +328,15 @@ export function Navbar() {
                 </Link>
               );
             })}
+
+            <Link
+              to="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-2 p-3 rounded-xl bg-stone-900/70 border border-purple-900/40 text-purple-300 text-sm font-medium"
+            >
+              <Shield className="w-4 h-4 text-purple-400" />
+              <span>Admin Portal</span>
+            </Link>
           </div>
 
           <Link

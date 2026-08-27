@@ -7,4 +7,6 @@ export default [
   route("search", "routes/search.tsx"),
   route("bookmarks", "routes/bookmarks.tsx"),
   route("characters", "routes/characters.tsx"),
+  route("admin", "routes/admin.tsx"),
+  route("api/auth", "routes/api.auth.ts"),
 ] satisfies RouteConfig;

@@ -43,8 +43,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+import { AuthProvider } from "./context/AuthContext";
+import { AuthModal } from "./components/AuthModal";
+
 export default function App() {
-  return <Outlet />;
+  return (
+    <AuthProvider>
+      <Outlet />
+      <AuthModal />
+    </AuthProvider>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
