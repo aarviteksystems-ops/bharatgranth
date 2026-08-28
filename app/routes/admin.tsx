@@ -19,7 +19,8 @@ import {
   Eye,
   EyeOff,
   Hash,
-  FileText
+  FileText,
+  FileSpreadsheet
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -80,6 +81,35 @@ export default function AdminPage() {
   const [hashes, setHashes] = useState<StoredHashedCredential[]>([]);
   const [logs, setLogs] = useState<StoredLog[]>([]);
   const [stats, setStats] = useState({ totalUsers: 0, totalHashes: 0, totalLogs: 0, adminCount: 0 });
+
+  const [syncingSheets, setSyncingSheets] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ message?: string; error?: string }>({});
+
+  const handleSyncGoogleSheets = async () => {
+    setSyncingSheets(true);
+    setSyncStatus({});
+    try {
+      const activeKey = adminPasskey.trim() || (user?.role === "admin" ? "admin123" : "");
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-Passkey": activeKey
+        },
+        body: JSON.stringify({ actionType: "sync-sheets" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncStatus({ message: data.message });
+      } else {
+        setSyncStatus({ error: data.error || "Failed to sync to Google Sheet." });
+      }
+    } catch (e) {
+      setSyncStatus({ error: "Failed to communicate with sync server." });
+    } finally {
+      setSyncingSheets(false);
+    }
+  };
 
   // Auto-unlock if logged-in user is admin
   useEffect(() => {
@@ -260,7 +290,15 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleSyncGoogleSheets}
+              disabled={syncingSheets}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/50 rounded-xl text-xs font-cinzel text-emerald-300 hover:text-emerald-100 transition cursor-pointer disabled:opacity-50"
+            >
+              <FileSpreadsheet className={`w-3.5 h-3.5 ${syncingSheets ? "animate-spin" : ""}`} />
+              {syncingSheets ? "SYNCING..." : "SYNC TO GOOGLE SHEET"}
+            </button>
             <button
               onClick={fetchData}
               disabled={loading}
@@ -278,6 +316,20 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+
+        {syncStatus.message && (
+          <div className="p-4 bg-emerald-950/60 border border-emerald-700/50 rounded-xl text-xs font-sans text-emerald-300 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{syncStatus.message}</span>
+          </div>
+        )}
+
+        {syncStatus.error && (
+          <div className="p-4 bg-red-950/60 border border-red-700/50 rounded-xl text-xs font-sans text-red-300 flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{syncStatus.error}</span>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

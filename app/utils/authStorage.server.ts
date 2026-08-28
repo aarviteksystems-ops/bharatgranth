@@ -259,6 +259,9 @@ export function registerUser(data: {
     userAgent: data.userAgent
   });
 
+  // 4. Sync signup to Google Sheet if GOOGLE_SHEET_WEBHOOK_URL is configured (non-blocking)
+  syncSignupToGoogleSheet(newUser).catch((err) => console.error("Google Sheet background sync error:", err));
+
   return {
     success: true,
     user: {
@@ -267,6 +270,72 @@ export function registerUser(data: {
       role
     }
   };
+}
+
+/**
+ * Safely posts new signup data to configured Google Sheet Webhook URL in background
+ */
+export async function syncSignupToGoogleSheet(user: {
+  id: string;
+  username: string;
+  email: string;
+  phone: string;
+  role: string;
+  createdAt: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!webhookUrl || !webhookUrl.trim()) {
+    return { success: false, error: "GOOGLE_SHEET_WEBHOOK_URL is not set in .env.local" };
+  }
+
+  try {
+    const res = await fetch(webhookUrl.trim(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      redirect: "follow",
+      body: JSON.stringify({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        createdAt: user.createdAt
+      })
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      const err = "Google Access Denied (HTTP 401/403): In Google Apps Script, click Deploy > Manage deployments > Edit, and change 'Who has access' to 'Anyone'.";
+      console.error(err);
+      return { success: false, error: err };
+    }
+
+    if (res.status === 404) {
+      const err = "Google Web App Not Found (HTTP 404): Please check the Web App URL in .env.local or deploy a New Deployment in Google Apps Script.";
+      console.error(err);
+      return { success: false, error: err };
+    }
+
+    const responseText = await res.text();
+
+    if (responseText.includes("accounts.google.com") || responseText.includes("signin")) {
+      const err = "Google Access Denied: In Google Apps Script, set 'Who has access' to 'Anyone' during deployment.";
+      console.error(err);
+      return { success: false, error: err };
+    }
+
+    if (responseText.includes("Page not found") || responseText.includes("unable to open the file")) {
+      const err = "Google Sheet Error: Unable to open file. In Google Apps Script, set 'Who has access' to 'Anyone' and deploy a New Version.";
+      console.error(err);
+      return { success: false, error: err };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error syncing signup to Google Sheet:", err);
+    return { success: false, error: err?.message || "Network error sending to Google Sheet." };
+  }
 }
 
 /**
@@ -281,31 +350,38 @@ export function authenticateUser(data: {
   const users = readUsers();
   const hashes = readHashedCredentials();
 
+  const cleanIdent = data.identifier.trim().toLowerCase();
   const usernameHash = hashField(data.identifier, "username");
   const emailHash = hashField(data.identifier, "email");
   const phoneHash = hashField(data.identifier, "phone");
   const passwordHash = hashField(data.password, "password");
 
-  // Authenticate by hash matching or direct match
-  const hashIndex = hashes.findIndex(
-    (h) =>
-      (h.usernameHash === usernameHash || h.emailHash === emailHash || h.phoneHash === phoneHash) &&
-      h.passwordHash === passwordHash
+  // 1. Direct match on users.json first
+  let userIndex = users.findIndex(
+    (u) =>
+      (u.username.toLowerCase() === cleanIdent ||
+       u.email.toLowerCase() === cleanIdent ||
+       u.phone.trim() === data.identifier.trim()) &&
+      u.password === data.password
   );
 
-  let userIndex = -1;
-  if (hashIndex !== -1) {
-    const matchedHashId = hashes[hashIndex].id;
-    userIndex = users.findIndex((u) => u.id === matchedHashId);
-  } else {
-    // Direct match fallback
-    userIndex = users.findIndex(
-      (u) =>
-        (u.username.toLowerCase() === data.identifier.toLowerCase().trim() ||
-         u.email.toLowerCase() === data.identifier.toLowerCase().trim() ||
-         u.phone === data.identifier.trim()) &&
-        u.password === data.password
+  // 2. Hash match fallback (only matching against active IDs in users.json)
+  let matchedHashIndex = -1;
+  if (userIndex === -1) {
+    const validUserIds = new Set(users.map((u) => u.id));
+    matchedHashIndex = hashes.findIndex(
+      (h) =>
+        validUserIds.has(h.id) &&
+        (h.usernameHash === usernameHash || h.emailHash === emailHash || h.phoneHash === phoneHash) &&
+        h.passwordHash === passwordHash
     );
+
+    if (matchedHashIndex !== -1) {
+      const matchedHashId = hashes[matchedHashIndex].id;
+      userIndex = users.findIndex((u) => u.id === matchedHashId);
+    }
+  } else {
+    matchedHashIndex = hashes.findIndex((h) => h.id === users[userIndex].id);
   }
 
   if (userIndex === -1) {
@@ -328,8 +404,8 @@ export function authenticateUser(data: {
   writeUsers(users);
 
   // Update hash file timestamps too
-  if (hashIndex !== -1) {
-    hashes[hashIndex].lastLoginAt = now;
+  if (matchedHashIndex !== -1) {
+    hashes[matchedHashIndex].lastLoginAt = now;
     writeHashedCredentials(hashes);
   }
 
@@ -351,3 +427,36 @@ export function authenticateUser(data: {
     }
   };
 }
+
+/**
+ * Syncs ALL stored users from users.json to the configured Google Sheet
+ */
+export async function syncAllUsersToGoogleSheet(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!webhookUrl || !webhookUrl.trim()) {
+    return { 
+      success: false, 
+      syncedCount: 0, 
+      error: "GOOGLE_SHEET_WEBHOOK_URL environment variable is missing in .env.local or Vercel." 
+    };
+  }
+
+  const users = readUsers();
+  let syncedCount = 0;
+
+  for (const user of users) {
+    const res = await syncSignupToGoogleSheet(user);
+
+    if (!res.success) {
+      return {
+        success: false,
+        syncedCount,
+        error: res.error || "Failed to sync signup data to Google Sheet."
+      };
+    }
+    syncedCount++;
+  }
+
+  return { success: true, syncedCount };
+}
+

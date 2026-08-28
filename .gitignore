@@ -8,3 +8,7 @@
 # React Router
 /.react-router/
 /build/
+
+.vercel
+.env*
+.py*

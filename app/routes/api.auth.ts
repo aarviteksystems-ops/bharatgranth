@@ -5,7 +5,8 @@ import {
   readUsers, 
   readHashedCredentials,
   readActivityLogs,
-  logActivity 
+  logActivity,
+  syncAllUsersToGoogleSheet 
 } from "../utils/authStorage.server";
 
 const ADMIN_MASTER_KEYS = ["admin123", "bharatgranth2026"];
@@ -154,6 +155,23 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
       return Response.json({ success: true, message: "Logged out successfully." });
+    }
+
+    if (actionType === "sync-sheets") {
+      if (!verifyAdminAccess(request)) {
+        return Response.json(
+          { success: false, error: "Unauthorized access to Google Sheet sync." },
+          { status: 403 }
+        );
+      }
+      const syncResult = await syncAllUsersToGoogleSheet();
+      if (!syncResult.success) {
+        return Response.json({ success: false, error: syncResult.error }, { status: 400 });
+      }
+      return Response.json({
+        success: true,
+        message: `Successfully synced ${syncResult.syncedCount} users to Google Sheet.`
+      });
     }
 
     return Response.json({ success: false, error: "Unknown action." }, { status: 400 });
