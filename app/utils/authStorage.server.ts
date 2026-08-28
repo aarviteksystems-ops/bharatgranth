@@ -1,15 +1,37 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import os from "os";
 
-const ENV_DIR = path.resolve(process.cwd(), ".env");
-const USERS_FILE = path.join(ENV_DIR, "users.json"); // Actual signup data file
-const HASH_FILE = path.join(ENV_DIR, "hashed_credentials.json"); // Dedicated hash file
-const LOGS_FILE = path.join(ENV_DIR, "activity_logs.json"); // Activity logs file
+// Determine safe storage directory (Vercel / Serverless uses os.tmpdir())
+function getStorageDir(): string {
+  const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+  if (isVercel) {
+    return path.join(os.tmpdir(), "bharatgranth_env");
+  }
+  
+  // Try local .env directory
+  const localDir = path.resolve(process.cwd(), ".env");
+  try {
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+    return localDir;
+  } catch {
+    // Fallback to OS temp directory if process.cwd() is read-only
+    return path.join(os.tmpdir(), "bharatgranth_env");
+  }
+}
 
-// Salt/Pepper constants for cryptographic hashing
-const HASH_SALT_CREDENTIALS = "bharatgranth_sacred_salt_2026";
-const PASSWORD_PEPPER = "bg_secure_pass_pepper_9981";
+let ENV_DIR = getStorageDir();
+let USERS_FILE = path.join(ENV_DIR, "users.json");
+let HASH_FILE = path.join(ENV_DIR, "hashed_credentials.json");
+let LOGS_FILE = path.join(ENV_DIR, "activity_logs.json");
+
+// In-memory fallbacks to guarantee uptime even if filesystem operations fail
+let memoryUsers: StoredUser[] = [];
+let memoryHashes: StoredHashedCredential[] = [];
+let memoryLogs: StoredActivityLog[] = [];
 
 export interface StoredUser {
   id: string;
@@ -48,23 +70,32 @@ export interface StoredActivityLog {
 }
 
 /**
- * Ensures the .env storage folder and data files exist
+ * Ensures the storage folder and data files exist safely (handles serverless read-only filesystems)
  */
 function ensureStorage() {
-  if (!fs.existsSync(ENV_DIR)) {
-    fs.mkdirSync(ENV_DIR, { recursive: true });
-  }
+  ENV_DIR = getStorageDir();
+  USERS_FILE = path.join(ENV_DIR, "users.json");
+  HASH_FILE = path.join(ENV_DIR, "hashed_credentials.json");
+  LOGS_FILE = path.join(ENV_DIR, "activity_logs.json");
 
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([], null, 2), "utf-8");
-  }
+  try {
+    if (!fs.existsSync(ENV_DIR)) {
+      fs.mkdirSync(ENV_DIR, { recursive: true });
+    }
 
-  if (!fs.existsSync(HASH_FILE)) {
-    fs.writeFileSync(HASH_FILE, JSON.stringify([], null, 2), "utf-8");
-  }
+    if (!fs.existsSync(USERS_FILE)) {
+      fs.writeFileSync(USERS_FILE, JSON.stringify(memoryUsers, null, 2), "utf-8");
+    }
 
-  if (!fs.existsSync(LOGS_FILE)) {
-    fs.writeFileSync(LOGS_FILE, JSON.stringify([], null, 2), "utf-8");
+    if (!fs.existsSync(HASH_FILE)) {
+      fs.writeFileSync(HASH_FILE, JSON.stringify(memoryHashes, null, 2), "utf-8");
+    }
+
+    if (!fs.existsSync(LOGS_FILE)) {
+      fs.writeFileSync(LOGS_FILE, JSON.stringify(memoryLogs, null, 2), "utf-8");
+    }
+  } catch (err) {
+    console.warn("Storage filesystem warning (using memory storage fallback):", err);
   }
 }
 
@@ -97,65 +128,90 @@ function generateDisplayHint(username: string): string {
 }
 
 /**
- * Read all actual signup users from .env/users.json
+ * Read all actual signup users
  */
 export function readUsers(): StoredUser[] {
   ensureStorage();
   try {
-    const raw = fs.readFileSync(USERS_FILE, "utf-8");
-    return JSON.parse(raw) as StoredUser[];
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, "utf-8");
+      const parsed = JSON.parse(raw) as StoredUser[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryUsers = parsed;
+      }
+    }
   } catch (err) {
-    console.error("Error reading users from .env/users.json:", err);
-    return [];
+    console.error("Error reading users from storage:", err);
+  }
+  return memoryUsers;
+}
+
+/**
+ * Write all actual users
+ */
+export function writeUsers(users: StoredUser[]) {
+  memoryUsers = users;
+  ensureStorage();
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write users file to disk (memory saved):", err);
   }
 }
 
 /**
- * Write all actual users to .env/users.json
- */
-export function writeUsers(users: StoredUser[]) {
-  ensureStorage();
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
-}
-
-/**
- * Read all hashed credentials from .env/hashed_credentials.json
+ * Read all hashed credentials
  */
 export function readHashedCredentials(): StoredHashedCredential[] {
   ensureStorage();
   try {
-    const raw = fs.readFileSync(HASH_FILE, "utf-8");
-    return JSON.parse(raw) as StoredHashedCredential[];
+    if (fs.existsSync(HASH_FILE)) {
+      const raw = fs.readFileSync(HASH_FILE, "utf-8");
+      const parsed = JSON.parse(raw) as StoredHashedCredential[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryHashes = parsed;
+      }
+    }
   } catch (err) {
-    console.error("Error reading hashes from .env/hashed_credentials.json:", err);
-    return [];
+    console.error("Error reading hashes from storage:", err);
+  }
+  return memoryHashes;
+}
+
+/**
+ * Write all hashed credentials
+ */
+export function writeHashedCredentials(hashes: StoredHashedCredential[]) {
+  memoryHashes = hashes;
+  ensureStorage();
+  try {
+    fs.writeFileSync(HASH_FILE, JSON.stringify(hashes, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write hashes file to disk (memory saved):", err);
   }
 }
 
 /**
- * Write all hashed credentials to .env/hashed_credentials.json
- */
-export function writeHashedCredentials(hashes: StoredHashedCredential[]) {
-  ensureStorage();
-  fs.writeFileSync(HASH_FILE, JSON.stringify(hashes, null, 2), "utf-8");
-}
-
-/**
- * Read activity logs from .env/activity_logs.json
+ * Read activity logs
  */
 export function readActivityLogs(): StoredActivityLog[] {
   ensureStorage();
   try {
-    const raw = fs.readFileSync(LOGS_FILE, "utf-8");
-    return JSON.parse(raw) as StoredActivityLog[];
+    if (fs.existsSync(LOGS_FILE)) {
+      const raw = fs.readFileSync(LOGS_FILE, "utf-8");
+      const parsed = JSON.parse(raw) as StoredActivityLog[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryLogs = parsed;
+      }
+    }
   } catch (err) {
-    console.error("Error reading activity logs from .env/activity_logs.json:", err);
-    return [];
+    console.error("Error reading activity logs from storage:", err);
   }
+  return memoryLogs;
 }
 
 /**
- * Append activity log to .env/activity_logs.json
+ * Append activity log
  */
 export function logActivity(log: Omit<StoredActivityLog, "id" | "timestamp">) {
   ensureStorage();
@@ -166,7 +222,13 @@ export function logActivity(log: Omit<StoredActivityLog, "id" | "timestamp">) {
     timestamp: new Date().toISOString()
   };
   logs.unshift(newEntry);
-  fs.writeFileSync(LOGS_FILE, JSON.stringify(logs.slice(0, 500), null, 2), "utf-8");
+  const trimmed = logs.slice(0, 500);
+  memoryLogs = trimmed;
+  try {
+    fs.writeFileSync(LOGS_FILE, JSON.stringify(trimmed, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write activity log to disk (memory saved):", err);
+  }
 }
 
 /**

@@ -176,7 +176,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return Response.json({ success: false, error: "Unknown action." }, { status: 400 });
   } catch (err: any) {
-    console.error("Auth action error:", err);
-    return Response.json({ success: false, error: "Internal server error." }, { status: 500 });
+    console.error("Auth action server error:", err);
+    return Response.json(
+      { success: false, error: err?.message || "Internal server error." },
+      { status: 500 }
+    );
   }
 }
