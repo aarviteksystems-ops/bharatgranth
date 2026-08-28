@@ -32,11 +32,6 @@ let LOGS_FILE = path.join(ENV_DIR, "activity_logs.json");
 const HASH_SALT_CREDENTIALS = process.env.HASH_SALT_CREDENTIALS || "bharatgranth_sacred_salt_2026";
 const PASSWORD_PEPPER = process.env.PASSWORD_PEPPER || "bg_secure_pass_pepper_9981";
 
-// In-memory fallbacks to guarantee uptime even if filesystem operations fail
-let memoryUsers: StoredUser[] = [];
-let memoryHashes: StoredHashedCredential[] = [];
-let memoryLogs: StoredActivityLog[] = [];
-
 export interface StoredUser {
   id: string;
   username: string;
@@ -72,6 +67,105 @@ export interface StoredActivityLog {
   ipHash?: string;
   userAgent?: string;
 }
+
+const SEED_USERS: StoredUser[] = [
+  {
+    id: "usr_admin_001",
+    username: "admin",
+    email: "admin@bharatgranth.org",
+    phone: "9876543210",
+    password: "admin123",
+    displayHint: "ad***n",
+    role: "admin",
+    createdAt: "2026-08-27T05:17:57.082Z",
+    lastLoginAt: "2026-08-28T05:25:23.038Z",
+    totalLogins: 3
+  },
+  {
+    id: "usr_5bca85ea-5c0",
+    username: "bobaks",
+    email: "goplarvindsinha@gmail.com",
+    phone: "7870901336",
+    password: "123456",
+    displayHint: "bo***s",
+    role: "user",
+    createdAt: "2026-08-28T04:27:54.239Z",
+    lastLoginAt: "2026-08-28T05:23:30.867Z",
+    totalLogins: 5
+  },
+  {
+    id: "usr_84293bb3-b97",
+    username: "testmail",
+    email: "millionbeautyproducts@gmail.com",
+    phone: "07870901336",
+    password: "1234567",
+    displayHint: "te***l",
+    role: "user",
+    createdAt: "2026-08-28T05:19:01.151Z",
+    lastLoginAt: "2026-08-28T05:19:01.151Z",
+    totalLogins: 1
+  },
+  {
+    id: "usr_0ce874cb-751",
+    username: "test",
+    email: "testmail@testc.com",
+    phone: "7870901336",
+    password: "123456",
+    displayHint: "te***t",
+    role: "user",
+    createdAt: "2026-08-28T05:21:50.948Z",
+    lastLoginAt: "2026-08-28T05:21:50.948Z",
+    totalLogins: 1
+  }
+];
+
+const SEED_HASHES: StoredHashedCredential[] = [
+  {
+    id: "usr_admin_001",
+    usernameHash: "c94dd077321586cc75484b8e0ad686f3828146152f209dfe7913833c52856c10",
+    emailHash: "9292da08d736622463e26da6362fa146375ed608bf5b83fa706344e1bedbb042",
+    phoneHash: "f09b655d293337daaf43fe1e2508401770a1ddac410f29a960a800957c2bd7c1",
+    passwordHash: "a047709984e144f186b19941e60a6843ea80cfda0dd4c310631a66abed1b1c71",
+    role: "admin",
+    createdAt: "2026-08-27T05:17:57.082Z",
+    lastLoginAt: "2026-08-28T05:25:23.038Z"
+  },
+  {
+    id: "usr_5bca85ea-5c0",
+    usernameHash: "c3849ebedd47fc400fb78a5cb9737848d10ac24033e1dac6070c4fac96f63640",
+    emailHash: "9472a4de05fa83f47ee18551f1906ea2ed34b9e52ebf629118dd645d4277da1b",
+    phoneHash: "163ff72485f28f46d6225d9667b862cdcb3a3d58332660833ef9e7e4f67331f6",
+    passwordHash: "7275902532d7e29cd6bfdd451888c62a8cdfbcd6ecde6be30170aba7c2dac169",
+    role: "user",
+    createdAt: "2026-08-28T04:27:54.239Z",
+    lastLoginAt: "2026-08-28T05:23:30.867Z"
+  },
+  {
+    id: "usr_84293bb3-b97",
+    usernameHash: "b30a5f311ae6864fbb7e454fd79e3ccea51101bb90ee03980997017731734984",
+    emailHash: "669ce8f45dd78e651719e381260334c4265b0f8163f2077cb7fa0da82778b755",
+    phoneHash: "66b6935c6938fcef236e263c0c2056d72fe2f944f5f7501ac93686f67368c46c",
+    passwordHash: "843023f51f212b6e1d1fcfe9c9a0032ded5681160ebf1ef501534f009be1121f",
+    role: "user",
+    createdAt: "2026-08-28T05:19:01.151Z",
+    lastLoginAt: "2026-08-28T05:19:01.151Z"
+  },
+  {
+    id: "usr_0ce874cb-751",
+    usernameHash: "a40f507adea1d75b56cac3eb1b3daaca56c703c2843a08c87f728c4a5ea5ebb0",
+    emailHash: "2ba14c4e7e50d2d0ee7cfbe1e035f0e526fd5fada4dceca291b01a16f940971b",
+    phoneHash: "163ff72485f28f46d6225d9667b862cdcb3a3d58332660833ef9e7e4f67331f6",
+    passwordHash: "7275902532d7e29cd6bfdd451888c62a8cdfbcd6ecde6be30170aba7c2dac169",
+    role: "user",
+    createdAt: "2026-08-28T05:21:50.948Z",
+    lastLoginAt: "2026-08-28T05:21:50.948Z"
+  }
+];
+
+// In-memory fallbacks to guarantee uptime even if filesystem operations fail
+let memoryUsers: StoredUser[] = [...SEED_USERS];
+let memoryHashes: StoredHashedCredential[] = [...SEED_HASHES];
+let memoryLogs: StoredActivityLog[] = [];
 
 /**
  * Ensures the storage folder and data files exist safely (handles serverless read-only filesystems)
