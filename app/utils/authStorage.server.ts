@@ -28,6 +28,10 @@ let USERS_FILE = path.join(ENV_DIR, "users.json");
 let HASH_FILE = path.join(ENV_DIR, "hashed_credentials.json");
 let LOGS_FILE = path.join(ENV_DIR, "activity_logs.json");
 
+// Salt/Pepper constants for cryptographic hashing
+const HASH_SALT_CREDENTIALS = "bharatgranth_sacred_salt_2026";
+const PASSWORD_PEPPER = "bg_secure_pass_pepper_9981";
+
 // In-memory fallbacks to guarantee uptime even if filesystem operations fail
 let memoryUsers: StoredUser[] = [];
 let memoryHashes: StoredHashedCredential[] = [];
